@@ -19,7 +19,7 @@ function TaskNode({ node, depth }: { node: TaskTreeNode; depth: number }) {
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            toggleTaskComplete(node.id);
+            void toggleTaskComplete(node.id);
           }}
         >
           {node.completed ? "✓" : ""}
@@ -46,17 +46,40 @@ function TaskNode({ node, depth }: { node: TaskTreeNode; depth: number }) {
 
 export function TaskTree() {
   const tasks = useAppStore((state) => state.tasks);
+  const isLoading = useAppStore((state) => state.isLoading);
+  const errorMessage = useAppStore((state) => state.errorMessage);
+  const addRootTask = useAppStore((state) => state.addRootTask);
+  const resetSampleData = useAppStore((state) => state.resetSampleData);
   const tree = useMemo(() => buildTaskTree(tasks), [tasks]);
+
+  function handleAddRootTask() {
+    const title = window.prompt("Enter the new root task title:");
+
+    if (!title) return;
+
+    void addRootTask(title);
+  }
 
   return (
     <section className="panel">
       <div className="panel-header">
         <div>
           <h2>Task Tree</h2>
-          <p>Fake data prototype for testing hierarchical task organization.</p>
+          <p>SQLite-backed prototype for testing hierarchical task organization.</p>
         </div>
-        <button className="primary-button" type="button">+ New Task</button>
+
+        <div className="button-row">
+          <button className="primary-button" type="button" onClick={handleAddRootTask}>
+            + New Root Task
+          </button>
+          <button className="secondary-button" type="button" onClick={() => void resetSampleData()}>
+            Reset Sample Data
+          </button>
+        </div>
       </div>
+
+      {isLoading ? <p className="info-message">Loading tasks from local database...</p> : null}
+      {errorMessage ? <p className="error-message">{errorMessage}</p> : null}
 
       <ul className="task-tree">
         {tree.map((root) => (

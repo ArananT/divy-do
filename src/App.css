@@ -114,3 +114,32 @@ button {
     background-color: #0f0f0f69;
   }
 }
+.button-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.secondary-button {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  background: #ffffff;
+  color: #1f2937;
+  cursor: pointer;
+}
+
+.secondary-button:hover {
+  background: #f1f5f9;
+}
+
+.info-message {
+  margin: 1rem 0 0;
+  color: #475569;
+}
+
+.error-message {
+  margin: 1rem 0 0;
+  color: #b91c1c;
+  font-weight: 600;
+}

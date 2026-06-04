@@ -4,6 +4,9 @@ import { findTaskById } from "../utils/taskTree";
 export function TaskDetailsPanel() {
   const tasks = useAppStore((state) => state.tasks);
   const selectedTaskId = useAppStore((state) => state.selectedTaskId);
+  const addChildTask = useAppStore((state) => state.addChildTask);
+  const renameSelectedTask = useAppStore((state) => state.renameSelectedTask);
+  const deleteSelectedTask = useAppStore((state) => state.deleteSelectedTask);
   const selectedTask = findTaskById(tasks, selectedTaskId);
 
   if (!selectedTask) {
@@ -18,6 +21,38 @@ export function TaskDetailsPanel() {
   const parent = findTaskById(tasks, selectedTask.parentId);
   const root = findTaskById(tasks, selectedTask.rootId);
 
+  function handleAddSubtask() {
+    if (!selectedTask) return;
+
+    const title = window.prompt(`Enter a subtask for "${selectedTask.title}":`);
+
+    if (!title) return;
+
+    void addChildTask(selectedTask.id, title);
+  }
+
+  function handleRenameTask() {
+    if (!selectedTask) return;
+
+    const title = window.prompt("Enter the new task title:", selectedTask.title);
+
+    if (!title) return;
+
+    void renameSelectedTask(title);
+  }
+
+  function handleDeleteTask() {
+    if (!selectedTask) return;
+
+    const confirmed = window.confirm(
+      `Delete "${selectedTask.title}" and all of its child tasks? This cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    void deleteSelectedTask();
+  }
+
   return (
     <aside className="details-panel">
       <div className="details-header">
@@ -27,9 +62,7 @@ export function TaskDetailsPanel() {
         </span>
       </div>
 
-      <p className="details-description">
-        {selectedTask.description || "No description yet."}
-      </p>
+      <p className="details-description">{selectedTask.description || "No description yet."}</p>
 
       <dl className="details-list">
         <div>
@@ -51,8 +84,16 @@ export function TaskDetailsPanel() {
       </dl>
 
       <div className="details-actions">
-        <button type="button">Edit Task</button>
+        <button type="button" onClick={handleRenameTask}>
+          Rename Task
+        </button>
+        <button type="button" onClick={handleAddSubtask}>
+          Add Subtask
+        </button>
         <button type="button">Schedule Task</button>
+        <button className="danger-button" type="button" onClick={handleDeleteTask}>
+          Delete Task
+        </button>
       </div>
     </aside>
   );
