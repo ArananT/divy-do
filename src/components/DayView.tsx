@@ -1,42 +1,52 @@
-﻿import { useAppStore } from "../store/useAppStore";
-import { findTaskById } from "../utils/taskTree";
-
-const hours = Array.from({ length: 14 }, (_, index) => index + 7);
-
-export function DayView() {
-  const tasks = useAppStore((state) => state.tasks);
-  const timeBlocks = useAppStore((state) => state.timeBlocks);
-
+﻿export function DayView() {
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <div>
-          <h2>Vertical Day View</h2>
-          <p>Placeholder for a conventional daily timeline using the same time-block data.</p>
+    <section className="panel placeholder-panel">
+      <p className="eyebrow">Future Feature / Not Final UI</p>
+      <h2>Future Vertical Day View</h2>
+
+      <p className="placeholder-intro">
+        This screen is a labelled placeholder for the daily schedule view. It is not a debugging
+        screen and it is not the final UI.
+      </p>
+
+      <div className="placeholder-card">
+        <h3>What this view will become</h3>
+        <p>
+          The vertical day view will show a day from morning to evening in a calendar-style layout.
+          Tasks from the task tree will eventually be assigned to time blocks in this schedule.
+        </p>
+      </div>
+
+      <div className="day-placeholder">
+        <div className="day-row">
+          <span>9:00 AM</span>
+          <div>Future time block area</div>
+        </div>
+        <div className="day-row">
+          <span>10:00 AM</span>
+          <div>Tasks will appear here after scheduling is added</div>
+        </div>
+        <div className="day-row">
+          <span>11:00 AM</span>
+          <div />
+        </div>
+        <div className="day-row">
+          <span>12:00 PM</span>
+          <div />
+        </div>
+        <div className="day-row">
+          <span>1:00 PM</span>
+          <div />
         </div>
       </div>
 
-      <div className="day-grid">
-        {hours.map((hour) => (
-          <div key={hour} className="day-row">
-            <span className="day-time">{hour}:00</span>
-            <div className="day-slot">
-              {timeBlocks.map((block) => {
-                const blockHour = new Date(block.startTime).getHours();
-                if (blockHour !== hour) return null;
-
-                const task = findTaskById(tasks, block.taskId);
-
-                return (
-                  <div key={block.id} className="day-block">
-                    <strong>{task?.title || "Unknown task"}</strong>
-                    <small>{block.durationMinutes} min</small>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <div className="placeholder-card">
+        <h3>Current status</h3>
+        <p>
+          This view is intentionally simple right now. The current milestone is focused on making
+          task creation, subtasks, completion, and filtering work before connecting tasks to time
+          blocks.
+        </p>
       </div>
     </section>
   );

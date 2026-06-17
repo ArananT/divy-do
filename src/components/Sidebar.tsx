@@ -1,11 +1,33 @@
 ﻿import { useAppStore } from "../store/useAppStore";
 import type { AppView } from "../types/task";
 
-const navItems: Array<{ id: AppView; label: string; description: string }> = [
-  { id: "tasks", label: "Task Tree", description: "Organize subtasks" },
-  { id: "clock", label: "Clock View", description: "Plan visually" },
-  { id: "day", label: "Day View", description: "Daily timeline" },
-  { id: "research", label: "Research", description: "Design notes" },
+type NavItem = {
+  view: AppView;
+  label: string;
+  description: string;
+};
+
+const navItems: NavItem[] = [
+  {
+    view: "tasks",
+    label: "Task Tree",
+    description: "Current working task hierarchy",
+  },
+  {
+    view: "clock",
+    label: "Future Analog Time-Block View",
+    description: "Planned circular scheduling view",
+  },
+  {
+    view: "day",
+    label: "Future Vertical Day View",
+    description: "Planned daily schedule layout",
+  },
+  {
+    view: "research",
+    label: "Project Notes",
+    description: "Research and design notes",
+  },
 ];
 
 export function Sidebar() {
@@ -14,27 +36,35 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="app-title">
-        <span className="app-title-mark">◎</span>
-        <div>
-          <h1>Divy-Do</h1>
-          <p>Task trees + time blocking</p>
-        </div>
+      <div>
+        <p className="eyebrow">Honours Project Prototype</p>
+        <h1>Divy-Do</h1>
+        <p className="sidebar-description">
+          Early desktop prototype for tree-based task planning and future time-blocking views.
+        </p>
       </div>
 
-      <nav className="nav-list">
+      <nav className="nav-list" aria-label="Primary navigation">
         {navItems.map((item) => (
           <button
-            key={item.id}
-            className={activeView === item.id ? "nav-item active" : "nav-item"}
-            onClick={() => setActiveView(item.id)}
+            key={item.view}
+            className={activeView === item.view ? "nav-item active" : "nav-item"}
             type="button"
+            onClick={() => setActiveView(item.view)}
           >
             <span>{item.label}</span>
             <small>{item.description}</small>
           </button>
         ))}
       </nav>
+
+      <div className="prototype-note">
+        <strong>Prototype status</strong>
+        <p>
+          Task saving and hierarchy are working. The time-blocking screens are labelled placeholders
+          for upcoming milestones.
+        </p>
+      </div>
     </aside>
   );
 }

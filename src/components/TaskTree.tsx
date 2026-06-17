@@ -1,6 +1,6 @@
-﻿import { useMemo } from "react";
+﻿import { useMemo, useState } from "react";
 import { useAppStore } from "../store/useAppStore";
-import { buildTaskTree, type TaskTreeNode } from "../utils/taskTree";
+import { buildTaskTree, filterTasks, type TaskTreeNode } from "../utils/taskTree";
 
 function TaskNode({ node, depth }: { node: TaskTreeNode; depth: number }) {
   const selectedTaskId = useAppStore((state) => state.selectedTaskId);
@@ -21,6 +21,7 @@ function TaskNode({ node, depth }: { node: TaskTreeNode; depth: number }) {
             event.stopPropagation();
             void toggleTaskComplete(node.id);
           }}
+          aria-label={node.completed ? "Mark task as open" : "Mark task as complete"}
         >
           {node.completed ? "✓" : ""}
         </button>
@@ -46,18 +47,25 @@ function TaskNode({ node, depth }: { node: TaskTreeNode; depth: number }) {
 
 export function TaskTree() {
   const tasks = useAppStore((state) => state.tasks);
+  const taskFilter = useAppStore((state) => state.taskFilter);
+  const setTaskFilter = useAppStore((state) => state.setTaskFilter);
   const isLoading = useAppStore((state) => state.isLoading);
   const errorMessage = useAppStore((state) => state.errorMessage);
   const addRootTask = useAppStore((state) => state.addRootTask);
   const resetSampleData = useAppStore((state) => state.resetSampleData);
-  const tree = useMemo(() => buildTaskTree(tasks), [tasks]);
+  const [newRootTaskTitle, setNewRootTaskTitle] = useState("");
 
-  function handleAddRootTask() {
-    const title = window.prompt("Enter the new root task title:");
+  const filteredTasks = useMemo(() => filterTasks(tasks, taskFilter), [tasks, taskFilter]);
+  const tree = useMemo(() => buildTaskTree(filteredTasks), [filteredTasks]);
 
-    if (!title) return;
+  function handleCreateRootTask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    void addRootTask(title);
+    const cleanTitle = newRootTaskTitle.trim();
+    if (!cleanTitle) return;
+
+    void addRootTask(cleanTitle);
+    setNewRootTaskTitle("");
   }
 
   return (
@@ -65,27 +73,80 @@ export function TaskTree() {
       <div className="panel-header">
         <div>
           <h2>Task Tree</h2>
-          <p>SQLite-backed prototype for testing hierarchical task organization.</p>
+          <p>
+            Working prototype area for creating, saving, completing, filtering, and organizing tasks
+            in a hierarchy.
+          </p>
         </div>
 
-        <div className="button-row">
-          <button className="primary-button" type="button" onClick={handleAddRootTask}>
-            + New Root Task
-          </button>
-          <button className="secondary-button" type="button" onClick={() => void resetSampleData()}>
-            Reset Sample Data
+        <button className="secondary-button" type="button" onClick={() => void resetSampleData()}>
+          Reset Sample Data
+        </button>
+      </div>
+
+      <form className="inline-create-form" onSubmit={handleCreateRootTask}>
+        <label className="field-label" htmlFor="new-root-task">
+          New main task
+        </label>
+        <div className="inline-create-row">
+          <input
+            id="new-root-task"
+            className="light-input"
+            type="text"
+            value={newRootTaskTitle}
+            onChange={(event) => setNewRootTaskTitle(event.target.value)}
+            placeholder="Example: Honours Project"
+          />
+          <button className="primary-button" type="submit">
+            Create Task
           </button>
         </div>
+      </form>
+
+      <div className="button-row filter-row">
+        <button
+          className={taskFilter === "all" ? "secondary-button active-filter" : "secondary-button"}
+          type="button"
+          onClick={() => setTaskFilter("all")}
+        >
+          All
+        </button>
+        <button
+          className={taskFilter === "open" ? "secondary-button active-filter" : "secondary-button"}
+          type="button"
+          onClick={() => setTaskFilter("open")}
+        >
+          Open
+        </button>
+        <button
+          className={
+            taskFilter === "completed" ? "secondary-button active-filter" : "secondary-button"
+          }
+          type="button"
+          onClick={() => setTaskFilter("completed")}
+        >
+          Completed
+        </button>
       </div>
 
       {isLoading ? <p className="info-message">Loading tasks from local database...</p> : null}
       {errorMessage ? <p className="error-message">{errorMessage}</p> : null}
 
-      <ul className="task-tree">
-        {tree.map((root) => (
-          <TaskNode key={root.id} node={root} depth={0} />
-        ))}
-      </ul>
+      {tree.length === 0 ? (
+        <div className="empty-state">
+          <h3>No tasks to show</h3>
+          <p>
+            Try changing the filter or creating a new main task. Tasks saved here will remain after
+            restarting the app.
+          </p>
+        </div>
+      ) : (
+        <ul className="task-tree">
+          {tree.map((root) => (
+            <TaskNode key={root.id} node={root} depth={0} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

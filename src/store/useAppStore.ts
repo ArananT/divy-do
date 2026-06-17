@@ -8,23 +8,27 @@ import {
   renameTask,
   resetTasksToSampleData,
   setTaskCompleted,
+  updateTaskDetails,
 } from "../services/taskService";
-import type { AppView, Task, TimeBlock } from "../types/task";
+import type { AppView, Task, TaskDetailsUpdate, TaskFilter, TimeBlock } from "../types/task";
 
 type AppState = {
   activeView: AppView;
   selectedTaskId: string | null;
   tasks: Task[];
   timeBlocks: TimeBlock[];
+  taskFilter: TaskFilter;
   isLoading: boolean;
   errorMessage: string | null;
   setActiveView: (view: AppView) => void;
+  setTaskFilter: (filter: TaskFilter) => void;
   selectTask: (taskId: string) => void;
   loadTasks: () => Promise<void>;
   resetSampleData: () => Promise<void>;
   addRootTask: (title: string) => Promise<void>;
   addChildTask: (parentId: string, title: string) => Promise<void>;
   renameSelectedTask: (title: string) => Promise<void>;
+  updateSelectedTaskDetails: (updates: TaskDetailsUpdate) => Promise<void>;
   deleteSelectedTask: () => Promise<void>;
   toggleTaskComplete: (taskId: string) => Promise<void>;
 };
@@ -34,10 +38,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedTaskId: null,
   tasks: [],
   timeBlocks: sampleTimeBlocks,
+  taskFilter: "all",
   isLoading: false,
   errorMessage: null,
 
   setActiveView: (view) => set({ activeView: view }),
+
+  setTaskFilter: (filter) => set({ taskFilter: filter }),
 
   selectTask: (taskId) => set({ selectedTaskId: taskId }),
 
@@ -155,6 +162,41 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         isLoading: false,
         errorMessage: "Failed to rename task.",
+      });
+    }
+  },
+
+  updateSelectedTaskDetails: async (updates) => {
+    const selectedTaskId = get().selectedTaskId;
+
+    if (!selectedTaskId) return;
+
+    const cleanTitle = updates.title.trim();
+
+    if (!cleanTitle) {
+      set({ errorMessage: "Task title cannot be empty." });
+      return;
+    }
+
+    set({ isLoading: true, errorMessage: null });
+
+    try {
+      const tasks = await updateTaskDetails(selectedTaskId, {
+        title: cleanTitle,
+        description: updates.description.trim(),
+        estimatedMinutes: updates.estimatedMinutes,
+      });
+
+      set({
+        tasks,
+        selectedTaskId,
+        isLoading: false,
+      });
+    } catch (error) {
+      console.error(error);
+      set({
+        isLoading: false,
+        errorMessage: "Failed to update task details.",
       });
     }
   },

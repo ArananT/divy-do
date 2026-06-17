@@ -1,53 +1,41 @@
-﻿import { useAppStore } from "../store/useAppStore";
-import { findTaskById } from "../utils/taskTree";
-
-const hours = Array.from({ length: 12 }, (_, index) => index + 1);
-
-export function AnalogClockView() {
-  const tasks = useAppStore((state) => state.tasks);
-  const timeBlocks = useAppStore((state) => state.timeBlocks);
-
+﻿export function AnalogClockView() {
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <div>
-          <h2>Analog Clock View</h2>
-          <p>Placeholder for assigning tasks to visual intervals on a 12-hour clock face.</p>
+    <section className="panel placeholder-panel">
+      <p className="eyebrow">Future Feature / Not Final UI</p>
+      <h2>Future Analog Time-Block View</h2>
+
+      <p className="placeholder-intro">
+        This screen is a labelled placeholder for the circular 12-hour planning view described in
+        the proposal. It is not meant to represent the final design yet.
+      </p>
+
+      <div className="placeholder-card">
+        <h3>What this view will become</h3>
+        <p>
+          The analog view will let tasks be placed around a clock-like schedule. For example, a user
+          could plan a task from 2:00 PM to 3:30 PM and see that time block as a segment on the
+          circular clock.
+        </p>
+      </div>
+
+      <div className="clock-placeholder">
+        <div className="clock-face">
+          <span className="clock-label top">12</span>
+          <span className="clock-label right">3</span>
+          <span className="clock-label bottom">6</span>
+          <span className="clock-label left">9</span>
+          <div className="clock-hand hour-hand" />
+          <div className="clock-hand minute-hand" />
+          <div className="clock-center" />
         </div>
       </div>
 
-      <div className="clock-layout">
-        <div className="clock-face">
-          {hours.map((hour) => {
-            const angle = hour * 30;
-            return (
-              <span
-                key={hour}
-                className="clock-number"
-                style={{ transform: `rotate(${angle}deg) translateY(-8.4rem) rotate(-${angle}deg)` }}
-              >
-                {hour}
-              </span>
-            );
-          })}
-          <div className="clock-center">Plan</div>
-          <div className="clock-block morning">9:00-10:30</div>
-          <div className="clock-block afternoon">1:00-2:30</div>
-        </div>
-
-        <div className="scheduled-list">
-          <h3>Scheduled blocks</h3>
-          {timeBlocks.map((block) => {
-            const task = findTaskById(tasks, block.taskId);
-            return (
-              <article key={block.id} className="scheduled-card">
-                <strong>{task?.title || "Unknown task"}</strong>
-                <span>{block.durationMinutes} minutes</span>
-                <small>Complete task on finish: {block.completeTaskOnFinish ? "yes" : "no"}</small>
-              </article>
-            );
-          })}
-        </div>
+      <div className="placeholder-card">
+        <h3>Current status</h3>
+        <p>
+          The task system and local saving are working first. This screen will be connected to saved
+          tasks after the task-management interface is more complete.
+        </p>
       </div>
     </section>
   );

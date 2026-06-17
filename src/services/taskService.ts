@@ -1,5 +1,5 @@
 import { sampleTasks } from "../data/sampleTasks";
-import type { Task } from "../types/task";
+import type { Task, TaskDetailsUpdate } from "../types/task";
 import {
   deleteAllTasks,
   deleteTasksByIds,
@@ -7,6 +7,7 @@ import {
   insertTask,
   loadTasksFromDatabase,
   updateTaskCompletion,
+  updateTaskDetailsInDatabase,
   updateTaskTitle,
 } from "./database";
 
@@ -107,6 +108,14 @@ export async function createChildTask(parent: Task, title: string): Promise<Task
 
 export async function renameTask(taskId: string, title: string): Promise<Task[]> {
   await updateTaskTitle(taskId, title);
+  return loadTasksFromDatabase();
+}
+
+export async function updateTaskDetails(
+  taskId: string,
+  updates: TaskDetailsUpdate,
+): Promise<Task[]> {
+  await updateTaskDetailsInDatabase(taskId, updates);
   return loadTasksFromDatabase();
 }
 

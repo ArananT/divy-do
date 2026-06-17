@@ -1,5 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
-import type { Task } from "../types/task";
+import type { Task, TaskDetailsUpdate } from "../types/task";
 
 const DATABASE_URL = "sqlite:divy-do.db";
 
@@ -157,6 +157,28 @@ export async function updateTaskTitle(taskId: string, title: string) {
     WHERE id = ?;
     `,
     [title, new Date().toISOString(), taskId],
+  );
+}
+
+export async function updateTaskDetailsInDatabase(
+  taskId: string,
+  updates: TaskDetailsUpdate,
+) {
+  const db = await getDatabase();
+
+  await db.execute(
+    `
+    UPDATE tasks
+    SET title = ?, description = ?, estimated_minutes = ?, updated_at = ?
+    WHERE id = ?;
+    `,
+    [
+      updates.title,
+      updates.description,
+      updates.estimatedMinutes ?? null,
+      new Date().toISOString(),
+      taskId,
+    ],
   );
 }
 
