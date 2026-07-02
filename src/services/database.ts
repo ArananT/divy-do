@@ -1,9 +1,9 @@
 import Database from "@tauri-apps/plugin-sql";
-import type { Task, TaskDetailsUpdate } from "../types/task";
+import type { Task, TaskDetailsUpdate, TimeBlock } from "../types/task";
 
 const DATABASE_URL = "sqlite:divy-do.db";
 
-let dbInstance: Database | null = null;
+let dbInstance: Awaited<ReturnType<typeof Database.load>> | null = null;
 
 type TaskRow = {
   id: string;
@@ -16,6 +16,24 @@ type TaskRow = {
   estimated_minutes: number | null;
   created_at: string;
   updated_at: string;
+};
+
+type TimeBlockRow = {
+  id: string;
+  task_id: string;
+  start_time: string;
+  end_time: string | null;
+  duration_minutes: number | null;
+  complete_task_on_finish: number;
+  source: string | null;
+  status: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type TableColumn = {
+  name: string;
+  notnull: number;
 };
 
 function rowToTask(row: TaskRow): Task {
@@ -38,12 +56,123 @@ function rowToTask(row: TaskRow): Task {
   };
 }
 
+function rowToTimeBlock(row: TimeBlockRow): TimeBlock {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    startTime: row.start_time,
+    endTime: row.end_time ?? undefined,
+    durationMinutes: row.duration_minutes ?? undefined,
+    completeTaskOnFinish: row.complete_task_on_finish === 1,
+    source: row.source === "tracked" ? "tracked" : "planned",
+    status: row.status === "active" ? "active" : "complete",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export async function getDatabase() {
   if (!dbInstance) {
     dbInstance = await Database.load(DATABASE_URL);
   }
 
   return dbInstance;
+}
+
+async function createTimeBlocksTable() {
+  const db = await getDatabase();
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS time_blocks (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT,
+      duration_minutes INTEGER,
+      complete_task_on_finish INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'planned',
+      status TEXT NOT NULL DEFAULT 'complete',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+}
+
+async function ensureTimeBlockSchema() {
+  const db = await getDatabase();
+
+  await createTimeBlocksTable();
+
+  let columns = await db.select<TableColumn[]>("PRAGMA table_info(time_blocks);");
+  let columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has("source")) {
+    await db.execute("ALTER TABLE time_blocks ADD COLUMN source TEXT NOT NULL DEFAULT 'planned';");
+  }
+
+  if (!columnNames.has("status")) {
+    await db.execute("ALTER TABLE time_blocks ADD COLUMN status TEXT NOT NULL DEFAULT 'complete';");
+  }
+
+  columns = await db.select<TableColumn[]>("PRAGMA table_info(time_blocks);");
+  columnNames = new Set(columns.map((column) => column.name));
+
+  const endTimeColumn = columns.find((column) => column.name === "end_time");
+  const durationColumn = columns.find((column) => column.name === "duration_minutes");
+
+  const needsRebuild =
+    endTimeColumn?.notnull === 1 ||
+    durationColumn?.notnull === 1 ||
+    !columnNames.has("source") ||
+    !columnNames.has("status");
+
+  if (!needsRebuild) return;
+
+  await db.execute("ALTER TABLE time_blocks RENAME TO time_blocks_old;");
+
+  await db.execute(`
+    CREATE TABLE time_blocks (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT,
+      duration_minutes INTEGER,
+      complete_task_on_finish INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'planned',
+      status TEXT NOT NULL DEFAULT 'complete',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  await db.execute(`
+    INSERT INTO time_blocks (
+      id,
+      task_id,
+      start_time,
+      end_time,
+      duration_minutes,
+      complete_task_on_finish,
+      source,
+      status,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      task_id,
+      start_time,
+      end_time,
+      duration_minutes,
+      complete_task_on_finish,
+      COALESCE(source, 'planned'),
+      COALESCE(status, 'complete'),
+      created_at,
+      updated_at
+    FROM time_blocks_old;
+  `);
+
+  await db.execute("DROP TABLE time_blocks_old;");
 }
 
 export async function initializeDatabase() {
@@ -64,21 +193,12 @@ export async function initializeDatabase() {
     );
   `);
 
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS time_blocks (
-      id TEXT PRIMARY KEY,
-      task_id TEXT NOT NULL,
-      start_time TEXT NOT NULL,
-      end_time TEXT NOT NULL,
-      duration_minutes INTEGER NOT NULL,
-      complete_task_on_finish INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
+  await ensureTimeBlockSchema();
 }
 
 export async function loadTasksFromDatabase(): Promise<Task[]> {
+  await initializeDatabase();
+
   const db = await getDatabase();
 
   const rows = await db.select<TaskRow[]>(`
@@ -101,6 +221,8 @@ export async function loadTasksFromDatabase(): Promise<Task[]> {
 }
 
 export async function insertTask(task: Task) {
+  await initializeDatabase();
+
   const db = await getDatabase();
 
   await db.execute(
@@ -135,6 +257,8 @@ export async function insertTask(task: Task) {
 }
 
 export async function updateTaskCompletion(taskId: string, completed: boolean) {
+  await initializeDatabase();
+
   const db = await getDatabase();
 
   await db.execute(
@@ -148,6 +272,8 @@ export async function updateTaskCompletion(taskId: string, completed: boolean) {
 }
 
 export async function updateTaskTitle(taskId: string, title: string) {
+  await initializeDatabase();
+
   const db = await getDatabase();
 
   await db.execute(
@@ -164,6 +290,8 @@ export async function updateTaskDetailsInDatabase(
   taskId: string,
   updates: TaskDetailsUpdate,
 ) {
+  await initializeDatabase();
+
   const db = await getDatabase();
 
   await db.execute(
@@ -185,6 +313,8 @@ export async function updateTaskDetailsInDatabase(
 export async function deleteTasksByIds(taskIds: string[]) {
   if (taskIds.length === 0) return;
 
+  await initializeDatabase();
+
   const db = await getDatabase();
 
   for (const taskId of taskIds) {
@@ -197,8 +327,97 @@ export async function deleteTasksByIds(taskIds: string[]) {
 }
 
 export async function deleteAllTasks() {
+  await initializeDatabase();
+
   const db = await getDatabase();
 
   await db.execute("DELETE FROM time_blocks;");
   await db.execute("DELETE FROM tasks;");
+}
+
+export async function loadTimeBlocksFromDatabase(): Promise<TimeBlock[]> {
+  await initializeDatabase();
+
+  const db = await getDatabase();
+
+  const rows = await db.select<TimeBlockRow[]>(`
+    SELECT
+      id,
+      task_id,
+      start_time,
+      end_time,
+      duration_minutes,
+      complete_task_on_finish,
+      source,
+      status,
+      created_at,
+      updated_at
+    FROM time_blocks
+    ORDER BY start_time ASC;
+  `);
+
+  return rows.map(rowToTimeBlock);
+}
+
+export async function insertTimeBlock(timeBlock: TimeBlock) {
+  await initializeDatabase();
+
+  const db = await getDatabase();
+
+  await db.execute(
+    `
+    INSERT INTO time_blocks (
+      id,
+      task_id,
+      start_time,
+      end_time,
+      duration_minutes,
+      complete_task_on_finish,
+      source,
+      status,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    `,
+    [
+      timeBlock.id,
+      timeBlock.taskId,
+      timeBlock.startTime,
+      timeBlock.endTime ?? null,
+      timeBlock.durationMinutes ?? null,
+      timeBlock.completeTaskOnFinish ? 1 : 0,
+      timeBlock.source,
+      timeBlock.status,
+      timeBlock.createdAt,
+      timeBlock.updatedAt,
+    ],
+  );
+}
+
+export async function completeTimeBlockInDatabase(
+  timeBlockId: string,
+  endTime: string,
+  durationMinutes: number,
+) {
+  await initializeDatabase();
+
+  const db = await getDatabase();
+
+  await db.execute(
+    `
+    UPDATE time_blocks
+    SET end_time = ?, duration_minutes = ?, status = 'complete', updated_at = ?
+    WHERE id = ?;
+    `,
+    [endTime, durationMinutes, new Date().toISOString(), timeBlockId],
+  );
+}
+
+export async function deleteTimeBlockFromDatabase(timeBlockId: string) {
+  await initializeDatabase();
+
+  const db = await getDatabase();
+
+  await db.execute("DELETE FROM time_blocks WHERE id = ?;", [timeBlockId]);
 }

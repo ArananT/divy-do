@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useState, type FormEvent } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { findTaskById } from "../utils/taskTree";
 
@@ -65,7 +65,7 @@ export function TaskDetailsPanel() {
     });
   }
 
-  function handleCreateSubtask(event: React.FormEvent<HTMLFormElement>) {
+  function handleCreateSubtask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const cleanTitle = newSubtaskTitle.trim();
@@ -180,7 +180,6 @@ export function TaskDetailsPanel() {
         <button type="button" onClick={() => void toggleTaskComplete(selectedTask.id)}>
           {selectedTask.completed ? "Mark Open" : "Mark Complete"}
         </button>
-        <button type="button">Schedule Task</button>
         <button className="danger-button" type="button" onClick={handleDeleteTask}>
           Delete Task
         </button>
