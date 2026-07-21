@@ -1,7 +1,8 @@
 ﻿import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAppStore } from "../store/useAppStore";
-import type { Task, TimeBlock } from "../types/task";
+import type { TimeBlock } from "../types/task";
 import { findTaskById } from "../utils/taskTree";
+import { TaskPickerList } from "./TaskPickerList";
 import { TaskTreeDiagram } from "./TaskTreeDiagram";
 
 type ClockSegment = {
@@ -12,30 +13,48 @@ type ClockSegment = {
   colorIndex: number;
 };
 
+type PlannedInputMode = "endTime" | "duration";
+
 const SEGMENT_COLORS = ["#4a5d23", "#2563eb", "#c2410c", "#7c3aed", "#0891b2", "#be123c"];
+
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
 
 function toLocalDateTime(date: string, time: string) {
   return `${date}T${time}:00`;
 }
 
+function addMinutesToTime(time: string, minutesToAdd: number) {
+  const [hours, minutes] = time.split(":").map(Number);
+  const date = new Date();
+
+  date.setHours(hours, minutes, 0, 0);
+  date.setMinutes(date.getMinutes() + minutesToAdd);
+
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function getLocalDateKey(value: string) {
   const date = new Date(value);
 
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 
-  return `${year}-${month}-${day}`;
+function normalizeAmPm(value: string) {
+  return value.replace(/\./g, "").toLowerCase();
 }
 
 function formatTime(value?: string) {
   if (!value) return "Active";
 
-  return new Date(value).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return normalizeAmPm(
+    new Date(value).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }),
+  );
 }
 
 function formatClockInputTime(date: string, time: string) {
@@ -170,10 +189,6 @@ function getClockMarkerLabel(windowStart: string, windowEnd: string, percent: nu
   return formatTime(new Date(markerMs).toISOString());
 }
 
-function taskLabel(task: Task) {
-  return task.parentId ? `↳ ${task.title}` : task.title;
-}
-
 export function AnalogClockView() {
   const tasks = useAppStore((state) => state.tasks);
   const selectedTaskId = useAppStore((state) => state.selectedTaskId);
@@ -196,6 +211,9 @@ export function AnalogClockView() {
   const activeTask = findTaskById(tasks, activeBlock?.taskId ?? null);
   const [nowTick, setNowTick] = useState(Date.now());
   const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
+  const [plannedInputMode, setPlannedInputMode] = useState<PlannedInputMode>("endTime");
+  const [plannedDurationMinutes, setPlannedDurationMinutes] = useState(10);
+  const [nextTaskId, setNextTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -204,6 +222,12 @@ export function AnalogClockView() {
 
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (plannedInputMode === "duration") {
+      setPlannedDurationMinutes(selectedTask?.estimatedMinutes ?? 10);
+    }
+  }, [plannedInputMode, selectedTask?.estimatedMinutes, selectedTaskId]);
 
   const clockWindowStart = toLocalDateTime(clockView.clockDate, clockView.clockStartTime);
   const clockWindowEnd = toLocalDateTime(clockView.clockDate, clockView.clockEndTime);
@@ -231,6 +255,7 @@ export function AnalogClockView() {
   );
 
   const hoveredSegment = segments.find((segment) => segment.block.id === hoveredSegmentId);
+  const hoveredTask = hoveredSegment ? findTaskById(tasks, hoveredSegment.block.taskId) : undefined;
 
   function handleAddPlannedBlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -240,12 +265,27 @@ export function AnalogClockView() {
       return;
     }
 
+    const endTime =
+      plannedInputMode === "duration"
+        ? addMinutesToTime(clockView.plannedStartTime, plannedDurationMinutes)
+        : clockView.plannedEndTime;
+
     void addPlannedTimeBlock({
       date: clockView.clockDate,
       startTime: clockView.plannedStartTime,
-      endTime: clockView.plannedEndTime,
+      endTime,
       completeTaskOnFinish: clockView.completeTaskOnFinish,
     });
+  }
+
+  function handleSwitchTask() {
+    if (!nextTaskId) return;
+
+    selectTask(nextTaskId);
+    window.setTimeout(() => {
+      void startTrackingSelectedTask();
+      setNextTaskId(null);
+    }, 0);
   }
 
   const startMarkerLabel = validClockWindow
@@ -268,7 +308,7 @@ export function AnalogClockView() {
 
       <p className="placeholder-intro">
         This view uses a selected clock window. Time blocks are drawn as pie slices based on how much
-        of that window they occupy. Hover over a slice to see its task name and duration.
+        of that window they occupy.
       </p>
 
       <div className="clock-tabs">
@@ -320,7 +360,7 @@ export function AnalogClockView() {
         </label>
 
         <button className="secondary-button" type="button" onClick={setClockToCurrentHour}>
-          Set Clock to Current Hour
+          Set Clock to Current Time
         </button>
       </div>
 
@@ -333,31 +373,23 @@ export function AnalogClockView() {
           <svg className="pie-clock" viewBox="0 0 300 300" role="img" aria-label="Time block clock">
             <circle cx="150" cy="150" r="96" className="pie-clock-background" />
 
-            {segments.map((segment) => {
-              const tooltipText = `${segment.label}
-${formatTime(segment.block.startTime)} - ${formatTime(segment.block.endTime)}
-Duration: ${getBlockDurationText(segment.block, nowTick)}`;
-
-              return (
-                <path
-                  key={segment.block.id}
-                  d={describePieSlice(150, 150, 96, segment.startAngle, segment.endAngle)}
-                  fill={SEGMENT_COLORS[segment.colorIndex]}
-                  className={
-                    segment.block.status === "active" || hoveredSegmentId === segment.block.id
-                      ? "pie-segment active"
-                      : "pie-segment"
-                  }
-                  onMouseEnter={() => setHoveredSegmentId(segment.block.id)}
-                  onMouseLeave={() => setHoveredSegmentId(null)}
-                  onFocus={() => setHoveredSegmentId(segment.block.id)}
-                  onBlur={() => setHoveredSegmentId(null)}
-                  tabIndex={0}
-                >
-                  <title>{tooltipText}</title>
-                </path>
-              );
-            })}
+            {segments.map((segment) => (
+              <path
+                key={segment.block.id}
+                d={describePieSlice(150, 150, 96, segment.startAngle, segment.endAngle)}
+                fill={SEGMENT_COLORS[segment.colorIndex]}
+                className={
+                  segment.block.status === "active" || hoveredSegmentId === segment.block.id
+                    ? "pie-segment active"
+                    : "pie-segment"
+                }
+                onMouseEnter={() => setHoveredSegmentId(segment.block.id)}
+                onMouseLeave={() => setHoveredSegmentId(null)}
+                onFocus={() => setHoveredSegmentId(segment.block.id)}
+                onBlur={() => setHoveredSegmentId(null)}
+                tabIndex={0}
+              />
+            ))}
 
             <circle cx="150" cy="150" r="38" className="pie-clock-center" />
             <text x="150" y="144" textAnchor="middle" className="pie-clock-title">
@@ -381,23 +413,21 @@ Duration: ${getBlockDurationText(segment.block, nowTick)}`;
             </text>
           </svg>
 
-          {hoveredSegment ? (
+          {hoveredSegment && hoveredTask ? (
             <div className="slice-hover-card">
-              <span>
-                {hoveredSegment.block.source === "tracked" ? "Tracked block" : "Planned block"}
-              </span>
-              <strong>{hoveredSegment.label}</strong>
+              <span>{hoveredSegment.block.source === "tracked" ? "Tracked block" : "Planned block"}</span>
+              <strong>{hoveredTask.title}</strong>
               <p>
-                {formatTime(hoveredSegment.block.startTime)} -{" "}
-                {formatTime(hoveredSegment.block.endTime)}
+                {formatTime(hoveredSegment.block.startTime)} - {formatTime(hoveredSegment.block.endTime)}
               </p>
               <p>Duration: {getBlockDurationText(hoveredSegment.block, nowTick)}</p>
+              {hoveredTask.description ? <p>{hoveredTask.description}</p> : null}
             </div>
           ) : (
-            <div className="slice-hover-card inactive">
+            <div className="slice-hover-card">
               <span>Slice details</span>
               <strong>Hover over a slice</strong>
-              <p>Task name, time range, and duration will appear here.</p>
+              <p>Task name, time range, duration, and description will appear here.</p>
             </div>
           )}
 
@@ -430,49 +460,63 @@ Duration: ${getBlockDurationText(segment.block, nowTick)}`;
               <h3>Add Planned Block</h3>
               <p>Select a task, then choose where it belongs inside the current clock window.</p>
 
-              <label className="field-label" htmlFor="planned-task-select">
-                Task to plan
-              </label>
-              <select
-                id="planned-task-select"
-                className="details-input"
-                value={selectedTaskId ?? ""}
-                onChange={(event) => {
-                  if (event.target.value) {
-                    selectTask(event.target.value);
-                  }
-                }}
-              >
-                <option value="">Select a task</option>
-                {tasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {taskLabel(task)}
-                  </option>
-                ))}
-              </select>
+              <TaskPickerList selectedTaskId={selectedTaskId} onSelectTask={selectTask} />
 
               <form onSubmit={handleAddPlannedBlock}>
-                <label className="field-label" htmlFor="planned-start">
-                  Block start
-                </label>
-                <input
-                  id="planned-start"
-                  className="details-input"
-                  type="time"
-                  value={clockView.plannedStartTime}
-                  onChange={(event) => setClockViewState({ plannedStartTime: event.target.value })}
-                />
+                <div className="mode-toggle-row">
+                  <button
+                    className={plannedInputMode === "endTime" ? "active" : ""}
+                    type="button"
+                    onClick={() => setPlannedInputMode("endTime")}
+                  >
+                    End time
+                  </button>
+                  <button
+                    className={plannedInputMode === "duration" ? "active" : ""}
+                    type="button"
+                    onClick={() => setPlannedInputMode("duration")}
+                  >
+                    Duration
+                  </button>
+                </div>
 
-                <label className="field-label" htmlFor="planned-end">
-                  Block end
-                </label>
-                <input
-                  id="planned-end"
-                  className="details-input"
-                  type="time"
-                  value={clockView.plannedEndTime}
-                  onChange={(event) => setClockViewState({ plannedEndTime: event.target.value })}
-                />
+                <div className="day-time-compact-row">
+                  <label htmlFor="planned-start">
+                    Start
+                    <input
+                      id="planned-start"
+                      className="details-input"
+                      type="time"
+                      value={clockView.plannedStartTime}
+                      onChange={(event) => setClockViewState({ plannedStartTime: event.target.value })}
+                    />
+                  </label>
+
+                  {plannedInputMode === "endTime" ? (
+                    <label htmlFor="planned-end">
+                      End
+                      <input
+                        id="planned-end"
+                        className="details-input"
+                        type="time"
+                        value={clockView.plannedEndTime}
+                        onChange={(event) => setClockViewState({ plannedEndTime: event.target.value })}
+                      />
+                    </label>
+                  ) : (
+                    <label htmlFor="planned-duration">
+                      Minutes
+                      <input
+                        id="planned-duration"
+                        className="details-input"
+                        type="number"
+                        min="1"
+                        value={plannedDurationMinutes}
+                        onChange={(event) => setPlannedDurationMinutes(Number(event.target.value))}
+                      />
+                    </label>
+                  )}
+                </div>
 
                 <label className="checkbox-label dark-checkbox-label">
                   <input
@@ -482,7 +526,7 @@ Duration: ${getBlockDurationText(segment.block, nowTick)}`;
                       setClockViewState({ completeTaskOnFinish: event.target.checked })
                     }
                   />
-                  Mark task complete when block is finished
+                  Mark complete when finished
                 </label>
 
                 <button className="save-details-button" type="submit">
@@ -493,60 +537,56 @@ Duration: ${getBlockDurationText(segment.block, nowTick)}`;
           ) : (
             <section className="clock-mode-panel">
               <h3>Live Tracking</h3>
-              <p>
-                Select a task and start tracking it. Switching to another task closes the previous
-                slice and starts a new one.
-              </p>
+              <p>Select a task and start tracking it. After tracking starts, use Next task to switch.</p>
 
-              <label className="field-label" htmlFor="tracking-task-select">
-                Task to track
-              </label>
-              <select
-                id="tracking-task-select"
-                className="details-input"
-                value={selectedTaskId ?? ""}
-                onChange={(event) => {
-                  if (event.target.value) {
-                    selectTask(event.target.value);
-                  }
-                }}
-              >
-                <option value="">Select a task</option>
-                {tasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {taskLabel(task)}
-                  </option>
-                ))}
-              </select>
+              {!activeBlock ? (
+                <>
+                  <TaskPickerList selectedTaskId={selectedTaskId} onSelectTask={selectTask} />
+
+                  <div className="tracking-actions">
+                    <button
+                      type="button"
+                      disabled={!selectedTask}
+                      onClick={() => void startTrackingSelectedTask()}
+                    >
+                      Start tracking
+                    </button>
+
+                    <button type="button" disabled>
+                      Stop tracking
+                    </button>
+                  </div>
+                </>
+              ) : null}
 
               {activeBlock && activeTask ? (
-                <div className="active-tracking-card">
-                  <span>Currently tracking</span>
-                  <strong>{activeTask.title}</strong>
-                  <small>Started: {formatTime(activeBlock.startTime)}</small>
-                  <div className="elapsed-time">{formatElapsed(activeBlock.startTime)}</div>
-                </div>
-              ) : (
-                <div className="active-tracking-card inactive">
-                  <span>No active task</span>
-                  <strong>Tracking is stopped</strong>
-                  <small>Select a task and press Start tracking.</small>
-                </div>
-              )}
+                <>
+                  <div className="active-tracking-card">
+                    <span>Currently tracking</span>
+                    <strong>{activeTask.title}</strong>
+                    <small>Started: {formatTime(activeBlock.startTime)}</small>
+                    <div className="elapsed-time">{formatElapsed(activeBlock.startTime)}</div>
+                  </div>
 
-              <div className="tracking-actions">
-                <button
-                  type="button"
-                  disabled={!selectedTask || activeBlock?.taskId === selectedTask.id}
-                  onClick={() => void startTrackingSelectedTask()}
-                >
-                  Start tracking
-                </button>
+                  <div className="tracking-actions">
+                    <button type="button" disabled>
+                      Start tracking
+                    </button>
 
-                <button type="button" disabled={!activeBlock} onClick={() => void stopTrackingCurrentTask()}>
-                  Stop tracking
-                </button>
-              </div>
+                    <button type="button" onClick={() => void stopTrackingCurrentTask()}>
+                      Stop tracking
+                    </button>
+                  </div>
+
+                  <div className="next-task-panel">
+                    <label className="field-label">Next task</label>
+                    <TaskPickerList selectedTaskId={nextTaskId} onSelectTask={setNextTaskId} />
+                    <button type="button" disabled={!nextTaskId} onClick={handleSwitchTask}>
+                      Switch task
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </section>
           )}
         </div>
@@ -555,7 +595,7 @@ Duration: ${getBlockDurationText(segment.block, nowTick)}`;
       <TaskTreeDiagram
         compact
         title="Task Tree Reference"
-        description="This visual tree shows the task hierarchy used by planned blocks and live tracking. Select a node to make it the active task for scheduling."
+        description="This visual tree shows the task hierarchy used by planned blocks and live tracking."
       />
 
       <section className="placeholder-card">

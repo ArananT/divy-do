@@ -55,7 +55,7 @@ export function TaskTree() {
   const [displayMode, setDisplayMode] = useState<TaskTreeDisplayMode>("vertical");
 
   const filteredTasks = useMemo(() => filterTasks(tasks, taskFilter), [tasks, taskFilter]);
-  const tree = useMemo(() => buildTaskTree(filteredTasks), [filteredTasks]);
+  const verticalTree = useMemo(() => buildTaskTree(filteredTasks), [filteredTasks]);
 
   function handleCreateRootTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -104,19 +104,6 @@ export function TaskTree() {
       </form>
 
       <div className="task-toolbar">
-        <div className="filter-row" aria-label="Task filters">
-          {(["all", "open", "completed"] as TaskFilter[]).map((filter) => (
-            <button
-              key={filter}
-              className={taskFilter === filter ? "filter-button active" : "filter-button"}
-              type="button"
-              onClick={() => setTaskFilter(filter)}
-            >
-              {filterButtonLabel(filter)}
-            </button>
-          ))}
-        </div>
-
         <div className="view-toggle-row" aria-label="Task tree display mode">
           <button
             className={displayMode === "vertical" ? "filter-button active" : "filter-button"}
@@ -133,21 +120,36 @@ export function TaskTree() {
             Tree View
           </button>
         </div>
+
+        {displayMode === "vertical" ? (
+          <div className="filter-row" aria-label="Task filters">
+            {(["all", "open", "completed"] as TaskFilter[]).map((filter) => (
+              <button
+                key={filter}
+                className={taskFilter === filter ? "filter-button active" : "filter-button"}
+                type="button"
+                onClick={() => setTaskFilter(filter)}
+              >
+                {filterButtonLabel(filter)}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {displayMode === "diagram" ? (
         <TaskTreeDiagram
           title="Tree View"
-          description="A visual view of your root tasks and their subtasks. Select any node to edit it in the details panel."
+          description="A visual view of all root tasks and subtasks. Completed tasks remain visible in this view."
         />
-      ) : tree.length === 0 ? (
+      ) : verticalTree.length === 0 ? (
         <div className="empty-state">
           <strong>No tasks match this view.</strong>
           <p>Try another filter or create a new task.</p>
         </div>
       ) : (
         <ul className="task-tree-list">
-          {tree.map((node) => (
+          {verticalTree.map((node) => (
             <TaskNode key={node.id} node={node} />
           ))}
         </ul>

@@ -32,36 +32,39 @@ function pad(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function getTodayInputValue() {
+function getTodayDate() {
   const now = new Date();
 
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-function getCurrentHourStart() {
+function getCurrentTime() {
   const now = new Date();
 
-  return `${pad(now.getHours())}:00`;
+  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
 function addOneHour(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
-  const nextHours = (hours + 1) % 24;
+  const date = new Date();
 
-  return `${pad(nextHours)}:${pad(minutes)}`;
+  date.setHours(hours, minutes, 0, 0);
+  date.setHours(date.getHours() + 1);
+
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function getDefaultClockViewState(): ClockViewState {
-  const currentHourStart = getCurrentHourStart();
-  const currentHourEnd = addOneHour(currentHourStart);
+  const startTime = getCurrentTime();
+  const endTime = addOneHour(startTime);
 
   return {
     activeClockTab: "planned",
-    clockDate: getTodayInputValue(),
-    clockStartTime: currentHourStart,
-    clockEndTime: currentHourEnd,
-    plannedStartTime: currentHourStart,
-    plannedEndTime: currentHourEnd,
+    clockDate: getTodayDate(),
+    clockStartTime: startTime,
+    clockEndTime: endTime,
+    plannedStartTime: startTime,
+    plannedEndTime: endTime,
     completeTaskOnFinish: false,
   };
 }
@@ -128,17 +131,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
 
   setClockToCurrentHour: () => {
-    const currentHourStart = getCurrentHourStart();
-    const currentHourEnd = addOneHour(currentHourStart);
+    const startTime = getCurrentTime();
+    const endTime = addOneHour(startTime);
 
     set((state) => ({
       clockView: {
         ...state.clockView,
-        clockDate: getTodayInputValue(),
-        clockStartTime: currentHourStart,
-        clockEndTime: currentHourEnd,
-        plannedStartTime: currentHourStart,
-        plannedEndTime: currentHourEnd,
+        clockDate: getTodayDate(),
+        clockStartTime: startTime,
+        clockEndTime: endTime,
+        plannedStartTime: startTime,
+        plannedEndTime: endTime,
       },
     }));
   },
@@ -419,8 +422,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     try {
       const timeBlocks = await startOrSwitchTrackedTimeBlock(get().timeBlocks, selectedTaskId);
-      const currentHourStart = getCurrentHourStart();
-      const currentHourEnd = addOneHour(currentHourStart);
+      const currentTime = getCurrentTime();
+      const currentTimeEnd = addOneHour(currentTime);
 
       set((state) => ({
         timeBlocks,
@@ -428,9 +431,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         clockView: {
           ...state.clockView,
           activeClockTab: "tracking",
-          clockDate: getTodayInputValue(),
-          clockStartTime: currentHourStart,
-          clockEndTime: currentHourEnd,
+          clockDate: getTodayDate(),
+          clockStartTime: currentTime,
+          clockEndTime: currentTimeEnd,
         },
       }));
     } catch (error) {
